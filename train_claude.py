@@ -98,11 +98,11 @@ training_args = TrainingArguments(
 )
 
 # 8. Add sequence length column for grouping
-def add_length(examples):
-    examples["length"] = [len(input_ids) for input_ids in examples["input_ids"]]
-    return examples
+# def add_length(examples):
+#     examples["length"] = [len(input_ids) for input_ids in examples["input_ids"]]
+#     return examples
 
-tokenized_datasets = tokenized_datasets.map(add_length, batched=True)
+# tokenized_datasets = tokenized_datasets.map(add_length, batched=True)
 
 # 9. Create the Trainer instance
 trainer = Trainer(
@@ -114,9 +114,9 @@ trainer = Trainer(
 )
 
 # 10. Compile model for better performance (PyTorch 2.0+)
-if hasattr(torch, 'compile'):
-    model = torch.compile(model)
-    print("Model compiled for better performance.")
+# if hasattr(torch, 'compile'):
+#     model = torch.compile(model)
+#     print("Model compiled for better performance.")
 
 # 11. Start training!
 print("Starting training...")
