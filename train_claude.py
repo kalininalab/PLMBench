@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="Train ESM2-t6 model from scratch")
 parser.add_argument("--data-file", type=str, required=True, help="Path to the training data file")
 parser.add_argument("--output-dir", type=Path, required=True, help="Directory to save the model")
 parser.add_argument("--model-name", type=str, required=True, help="Name of the model to train")
-parser.add_argument("--num-train-epochs", type=int, default=1, help="Number of training epochs")
+parser.add_argument("--max-steps", type=int, default=1_250_000, help="Number of steps/updates in training")
 parser.add_argument("--per-device-train-batch-size", type=int, default=32, help="Batch size per device during training")
 args = parser.parse_args()
 
@@ -73,15 +73,25 @@ data_collator = DataCollatorForLanguageModeling(
 training_args = TrainingArguments(
     output_dir=args.output_dir / args.model_name,
     overwrite_output_dir=True,
+
     save_strategy="epoch",
     save_only_model=True,
-    num_train_epochs=args.num_train_epochs,
+    logging_steps=500,
+    report_to=None,                     # Disable wandb/tensorboard logging
+    
     per_device_train_batch_size=args.per_device_train_batch_size,
     gradient_accumulation_steps=4,      # Effective batch size: 32 * 4 = 128
     gradient_checkpointing=True,        # Save memory, slight speed trade-off
-    learning_rate=4e-4,
+    
+    adam_beta1=0.9,
+    adam_beta2=0.98,
+    adam_epsilon=1e-8,
     weight_decay=0.01,
+    
+    max_steps=args.max_steps,
+    learning_rate=4e-4,
     warmup_steps=500,
+
     prediction_loss_only=True,
     fp16=True,                          # Enable mixed precision
     dataloader_num_workers=4,           # Reduced to avoid overhead
@@ -90,10 +100,6 @@ training_args = TrainingArguments(
     remove_unused_columns=False,
     group_by_length=True,               # Group similar length sequences
     length_column_name="length",
-    report_to=None,                     # Disable wandb/tensorboard logging
-    logging_steps=50,
-    save_steps=1000,
-    eval_steps=1000,
     max_grad_norm=1.0,                  # Gradient clipping
 )
 

@@ -2,9 +2,9 @@ universe = docker
 docker_image = gjoschka/kinodata3d-b0:2.3.0-cuda12.1
 executable = entry.sh
 
-output = runlogs_r/train.out
-error = runlogs_r/train.err
-log = runlogs_r/train.log
+output = runlogs_11_1M/train.out
+error = runlogs_11_1M/train.err
+log = runlogs_11_1M/train.log
 should_transfer_files = YES
 
 request_GPUs = 1
