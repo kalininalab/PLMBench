@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="Train ESM2-t6 model from scratch")
 parser.add_argument("--data-file", type=str, required=True, help="Path to the training data file")
 parser.add_argument("--output-dir", type=Path, required=True, help="Directory to save the model")
 parser.add_argument("--model-name", type=str, required=True, help="Name of the model to train")
-parser.add_argument("--max-steps", type=int, default=1_250_000, help="Number of steps/updates in training")
+parser.add_argument("--max-steps", type=int, default=250_000, help="Number of steps/updates in training")
 parser.add_argument("--per-device-train-batch-size", type=int, default=32, help="Batch size per device during training")
 args = parser.parse_args()
 
@@ -80,7 +80,7 @@ training_args = TrainingArguments(
     report_to=None,                     # Disable wandb/tensorboard logging
     
     per_device_train_batch_size=args.per_device_train_batch_size,
-    gradient_accumulation_steps=4,      # Effective batch size: 32 * 4 = 128
+    gradient_accumulation_steps=8,      # Effective batch size: 32 * 8 = 256
     gradient_checkpointing=True,        # Save memory, slight speed trade-off
     
     adam_beta1=0.9,
@@ -93,7 +93,7 @@ training_args = TrainingArguments(
     warmup_steps=500,
 
     prediction_loss_only=True,
-    fp16=True,                          # Enable mixed precision
+    # fp16=True,                          # Enable mixed precision
     dataloader_num_workers=4,           # Reduced to avoid overhead
     dataloader_pin_memory=True,
     dataloader_persistent_workers=True, # Keep workers alive between epochs
