@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(description="Train ESM2-t6 model from scratch")
 parser.add_argument("--data-file", type=str, required=True, help="Path to the training data file")
 parser.add_argument("--output-dir", type=Path, required=True, help="Directory to save the model")
 parser.add_argument("--model-name", type=str, required=True, help="Name of the model to train")
-parser.add_argument("--max-steps", type=int, default=250_000, help="Number of steps/updates in training")
-parser.add_argument("--per-device-train-batch-size", type=int, default=32, help="Batch size per device during training")
+parser.add_argument("--max-steps", type=int, default=50_000, help="Number of steps/updates in training")
+parser.add_argument("--per-device-train-batch-size", type=int, default=64, help="Batch size per device during training")
 args = parser.parse_args()
 
 # Set environment variables for better performance
@@ -80,7 +80,7 @@ training_args = TrainingArguments(
     report_to=None,                     # Disable wandb/tensorboard logging
     
     per_device_train_batch_size=args.per_device_train_batch_size,
-    gradient_accumulation_steps=8,      # Effective batch size: 32 * 8 = 256
+    gradient_accumulation_steps=8,      # Effective batch size: 64 * 8 = 512
     gradient_checkpointing=True,        # Save memory, slight speed trade-off
     
     adam_beta1=0.9,
@@ -89,8 +89,8 @@ training_args = TrainingArguments(
     weight_decay=0.01,
     
     max_steps=args.max_steps,
-    learning_rate=4e-4,
-    warmup_steps=500,
+    learning_rate=5e-5,
+    warmup_steps=1500,
 
     prediction_loss_only=True,
     # fp16=True,                          # Enable mixed precision

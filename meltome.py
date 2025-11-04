@@ -11,4 +11,6 @@ valid["split"] = "valid"
 df = pd.concat([train, test, valid])
 df["ID"] = [f"P{i:05d}" for i in range(len(df))]
 df.rename(columns={"target": "label"}, inplace=True)
-df[["ID", "sequence", "label", "split"]].to_csv("/wibicomfs/STBS/roman/meltome_atlas.csv", index=False)
+df[["ID", "sequence", "label", "split"]].to_csv("/scratch/chair_kalinina/s8rojoer/PLM/meltome_atlas.csv", index=False)
+# df[["ID", "sequence", "label", "split"]].to_csv("/wibicomfs/STBS/roman/meltome_atlas.csv", index=False)
+
