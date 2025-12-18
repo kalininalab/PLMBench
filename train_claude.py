@@ -11,8 +11,8 @@ parser = argparse.ArgumentParser(description="Train ESM2-t6 model from scratch")
 parser.add_argument("--data-file", type=str, required=True, help="Path to the training data file")
 parser.add_argument("--output-dir", type=Path, required=True, help="Directory to save the model")
 parser.add_argument("--model-name", type=str, required=True, help="Name of the model to train")
-parser.add_argument("--max-steps", type=int, default=50_000, help="Number of steps/updates in training")
-parser.add_argument("--per-device-train-batch-size", type=int, default=64, help="Batch size per device during training")
+parser.add_argument("--max-steps", type=int, default=200_000, help="Number of steps/updates in training")
+parser.add_argument("--per-device-train-batch-size", type=int, default=32, help="Batch size per device during training")
 args = parser.parse_args()
 
 # Set environment variables for better performance
@@ -21,8 +21,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 # 1. Define the model configuration for ESM2-t6
 config = EsmConfig(
     vocab_size=33,  # 20 amino acids + special tokens
-    num_hidden_layers=6,
-    hidden_size=320,
+    num_hidden_layers=30,
+    hidden_size=640,
     num_attention_heads=20,
     pad_token_id=0,
     max_position_embeddings=1024,
@@ -30,7 +30,8 @@ config = EsmConfig(
 )
 
 # 2. Initialize the tokenizer
-tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D")
+# tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D")
+tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t30_150M_UR50D")
 
 # 3. Initialize the model from the config
 model = EsmForMaskedLM(config).to("cuda")
@@ -80,7 +81,7 @@ training_args = TrainingArguments(
     report_to=None,                     # Disable wandb/tensorboard logging
     
     per_device_train_batch_size=args.per_device_train_batch_size,
-    gradient_accumulation_steps=8,      # Effective batch size: 64 * 8 = 512
+    gradient_accumulation_steps=8,      # Effective batch size: 128 * 8 = 1024
     gradient_checkpointing=True,        # Save memory, slight speed trade-off
     
     adam_beta1=0.9,
@@ -89,12 +90,12 @@ training_args = TrainingArguments(
     weight_decay=0.01,
     
     max_steps=args.max_steps,
-    learning_rate=5e-5,
-    warmup_steps=1500,
+    learning_rate=4e-5,
+    warmup_steps=2_500,
 
     prediction_loss_only=True,
     # fp16=True,                          # Enable mixed precision
-    dataloader_num_workers=4,           # Reduced to avoid overhead
+    dataloader_num_workers=8,           # Reduced to avoid overhead
     dataloader_pin_memory=True,
     dataloader_persistent_workers=True, # Keep workers alive between epochs
     remove_unused_columns=False,
