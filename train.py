@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-
 import argparse
 from pathlib import Path
+import os
 
 import torch
-# torch.multiprocessing.set_start_method('spawn', force=True)
 from datasets import load_dataset
 from transformers import EsmConfig, EsmForMaskedLM, EsmTokenizer, TrainingArguments, Trainer, DataCollatorForLanguageModeling
 
@@ -13,71 +11,100 @@ parser = argparse.ArgumentParser(description="Train ESM2-t6 model from scratch")
 parser.add_argument("--data-file", type=str, required=True, help="Path to the training data file")
 parser.add_argument("--output-dir", type=Path, required=True, help="Directory to save the model")
 parser.add_argument("--model-name", type=str, required=True, help="Name of the model to train")
-parser.add_argument("--num-train-epochs", type=int, default=1, help="Number of training epochs")
-parser.add_argument("--per-device-train-batch-size", type=int, default=16, help="Batch size per device during training")
+parser.add_argument("--max-steps", type=int, default=300_000, help="Number of steps/updates in training")
+parser.add_argument("--per-device-train-batch-size", type=int, default=64, help="Batch size per device during training")
 args = parser.parse_args()
 
+# Set environment variables for better performance
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 # 1. Define the model configuration for ESM2-t6
-# The values are based on the original ESM2-t6_8M_UR50D model
-# ESM2 used 2M tokens per batch. With 32 (bs) * 1024 (tokens) per batch, we need to run 305,175.78 batches
 config = EsmConfig(
     vocab_size=33,  # 20 amino acids + special tokens
-    num_hidden_layers=6,
-    hidden_size=320,
+    num_hidden_layers=30,
+    hidden_size=640,
     num_attention_heads=20,
     pad_token_id=0,
     max_position_embeddings=1024,
     intermediate_size=1280,
 )
 
-# 2. Initialize the tokenizer (can use a pre-existing one or build from your data)
-# For a true scratch pretraining, you would build your own vocab
+# 2. Initialize the tokenizer
 tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D")
+# tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t30_150M_UR50D")
 
 # 3. Initialize the model from the config
 model = EsmForMaskedLM(config).to("cuda")
 print("The model has", sum(p.numel() for p in model.parameters() if p.requires_grad), "trainable parameters.")
 
-# 4. Prepare a dummy dataset for demonstration
-# In a real-world scenario, this would be a massive protein sequence dataset
-raw_datasets = load_dataset("text", data_files={"train": [args.data_file]})
+# 4. Load dataset with optimized settings
+raw_datasets = load_dataset(
+    "text", 
+    data_files={"train": [args.data_file]},
+)
 
-# 5. Tokenize the dataset
+# 5. Optimized tokenization function
 def tokenize_function(examples):
-    return tokenizer(examples["text"])  # , truncation=True, padding="max_length", max_length=1022)
+    # Process in batches and handle padding dynamically
+    return tokenizer(
+        examples["text"], 
+        truncation=True, 
+        max_length=1022,  # Leave room for special tokens
+        padding=False,    # Dynamic padding handled by data collator
+        return_special_tokens_mask=True
+    )
 
+# Tokenize with batching enabled
 tokenized_datasets = raw_datasets.map(
     tokenize_function,
-    batched=False,
-    num_proc=4, # Use multiple processes for faster tokenization
+    batched=True,           # CRITICAL: Process in batches
+    num_proc=16,            # Increased parallel processes
     remove_columns=["text"],
 )
 
-# 6. Use the DataCollator for Masked Language Modeling
+# 6. Optimized data collator
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
     mlm=True,
     mlm_probability=0.15,
+    pad_to_multiple_of=8,   # Optimize for tensor cores
 )
 
-# 7. Define training arguments
+# 7. Optimized training arguments
 training_args = TrainingArguments(
     output_dir=args.output_dir / args.model_name,
     overwrite_output_dir=True,
+
     save_strategy="epoch",
     save_only_model=True,
-    num_train_epochs=args.num_train_epochs,
+    logging_steps=500,
+    report_to=None,                     # Disable wandb/tensorboard logging
+    
     per_device_train_batch_size=args.per_device_train_batch_size,
-    # gradient_accumulation_steps=8,
-    # gradient_checkpointing=True,
-    learning_rate=4e-4,
+    gradient_accumulation_steps=8,      # Effective batch size: 64 * 8 = 512
+    gradient_checkpointing=True,        # Save memory, slight speed trade-off
+    
+    adam_beta1=0.9,
+    adam_beta2=0.98,
+    adam_epsilon=1e-8,
+    weight_decay=0.01,
+    
+    max_steps=args.max_steps,
+    learning_rate=4e-5,
+    warmup_steps=15_000,
+
     prediction_loss_only=True,
-    fp16=torch.cuda.is_available(),
-    dataloader_num_workers=8,
+    # fp16=True,                          # Enable mixed precision
+    dataloader_num_workers=16,          # Reduced to avoid overhead
     dataloader_pin_memory=True,
+    dataloader_persistent_workers=True, # Keep workers alive between epochs
+    remove_unused_columns=False,
+    group_by_length=True,               # Group similar length sequences
+    length_column_name="length",
+    max_grad_norm=1.0,                  # Gradient clipping
 )
 
-# 8. Create the Trainer instance
+# 9. Create the Trainer instance
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -86,8 +113,10 @@ trainer = Trainer(
     train_dataset=tokenized_datasets["train"],
 )
 
-# 9. Start training!
+# 11. Start training!
+print("Starting training...")
 trainer.train()
 
-# 10. Save the final model
+# 12. Save the final model
+print("Saving model...")
 trainer.save_model(args.output_dir / args.model_name / "esm2_t6_final_model")
